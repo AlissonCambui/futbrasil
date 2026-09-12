@@ -1,0 +1,20 @@
+# dependências
+node_modules/
+
+# build
+dist/
+dist-ssr/
+*.local
+
+# variáveis de ambiente (nunca suba chaves de API para o GitHub)
+.env
+.env.*
+!.env.example
+
+# editores
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# sistema
+.DS_Store
