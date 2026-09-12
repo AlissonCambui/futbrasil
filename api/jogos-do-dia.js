@@ -1,20 +1,3 @@
-/**
- * Função serverless da Vercel.
- *
- * A Vercel detecta automaticamente qualquer arquivo dentro da pasta /api
- * na raiz do projeto e o transforma numa rota de backend — nesse caso,
- * ela fica disponível em: https://SEU-SITE.vercel.app/api/jogos-do-dia
- *
- * A chave da API-Football fica guardada como variável de ambiente
- * (API_FOOTBALL_KEY) configurada no painel da Vercel — NUNCA aqui no
- * código. Assim, ela nunca chega ao navegador do visitante.
- *
- * Como configurar a chave na Vercel:
- *   1. No painel do projeto na Vercel, vá em Settings > Environment Variables.
- *   2. Crie uma variável chamada API_FOOTBALL_KEY com o valor da sua chave.
- *   3. Salve e faça um novo deploy (ou o próximo deploy já pega o valor).
- */
-
 const LEAGUE_ID_BRASILEIRAO_SERIE_A = 71;
 const SEASON = 2026;
 
@@ -29,14 +12,29 @@ export default async function handler(req, res) {
   }
 
   try {
-    const apiResponse = await fetch(
-      `https://v3.football.api-sports.io/fixtures?league=${LEAGUE_ID_BRASILEIRAO_SERIE_A}&season=${SEASON}&next=10`,
+    // 1. Primeiro, descobrimos qual é a rodada atual do Brasileirão na API-Football
+    const roundResponse = await fetch(
+      `https://v3.football.api-sports.io/fixtures/rounds?league=${LEAGUE_ID_BRASILEIRAO_SERIE_A}&season=${SEASON}&current=true`,
       {
         headers: {
           'x-apisports-key': apiKey,
         },
       }
     );
+
+    const roundData = await roundResponse.json();
+    const currentRound = roundData.response && roundData.response[0];
+
+    // 2. Com a rodada atual descoberta, buscamos todas as partidas dela
+    const endpoint = currentRound
+      ? `https://v3.football.api-sports.io/fixtures?league=${LEAGUE_ID_BRASILEIRAO_SERIE_A}&season=${SEASON}&round=${encodeURIComponent(currentRound)}`
+      : `https://v3.football.api-sports.io/fixtures?league=${LEAGUE_ID_BRASILEIRAO_SERIE_A}&season=${SEASON}&next=10`;
+
+    const apiResponse = await fetch(endpoint, {
+      headers: {
+        'x-apisports-key': apiKey,
+      },
+    });
 
     if (!apiResponse.ok) {
       throw new Error(`A API de futebol respondeu com status ${apiResponse.status}`);
@@ -64,15 +62,10 @@ export default async function handler(req, res) {
         stadium: item.fixture.venue?.name
           ? `${item.fixture.venue.name}${item.fixture.venue.city ? ', ' + item.fixture.venue.city : ''}`
           : 'Local a confirmar',
-        // A API-Football (plano gratuito) não fornece canal de transmissão.
-        // Por isso avisamos o usuário a confirmar na fonte oficial.
         channel: 'Confirme no canal oficial mais próximo do jogo',
       };
     });
 
-    // Cache de 1 hora na borda da Vercel: o site consulta a API-Football no
-    // máximo 1x por hora, mesmo que muitas pessoas acessem o site nesse
-    // intervalo — importante para não estourar o limite do plano gratuito.
     res.setHeader('Cache-Control', 's-maxage=3600, stale-while-revalidate=1800');
     res.status(200).json({ matches });
   } catch (error) {
